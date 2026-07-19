@@ -18,10 +18,37 @@ import (
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
 
+// migrationLockID is an arbitrary constant identifying this project's
+// migration advisory lock. Any int64 works; it just needs to not collide
+// with a lock ID some other part of the system might use.
+const migrationLockID = 727246001
+
 // Apply runs every migration in migrations/ that isn't already recorded in
 // schema_migrations, in filename order, each in its own transaction.
+//
+// All four of this project's processes (scheduler, two workers, api) call
+// Apply on startup, so this takes a session-scoped Postgres advisory lock
+// on one dedicated connection for the whole operation first. Without it,
+// concurrent "CREATE TABLE IF NOT EXISTS" statements from multiple
+// processes racing on a fresh database can collide on Postgres's own
+// catalog (a unique index on pg_type covering each table's implicit row
+// type) — caught by actually running `docker compose up`, not by
+// reasoning about the SQL in isolation.
 func Apply(ctx context.Context, pool *pgxpool.Pool) error {
-	if _, err := pool.Exec(ctx, `
+	conn, err := pool.Acquire(ctx)
+	if err != nil {
+		return fmt.Errorf("acquire connection for migration lock: %w", err)
+	}
+	defer conn.Release()
+
+	if _, err := conn.Exec(ctx, `SELECT pg_advisory_lock($1)`, int64(migrationLockID)); err != nil {
+		return fmt.Errorf("acquire migration advisory lock: %w", err)
+	}
+	defer func() {
+		_, _ = conn.Exec(context.Background(), `SELECT pg_advisory_unlock($1)`, int64(migrationLockID))
+	}()
+
+	if _, err := conn.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS schema_migrations (
 			filename   TEXT PRIMARY KEY,
 			applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -40,7 +67,7 @@ func Apply(ctx context.Context, pool *pgxpool.Pool) error {
 	sort.Strings(names)
 
 	for _, name := range names {
-		applied, err := isApplied(ctx, pool, name)
+		applied, err := isApplied(ctx, conn, name)
 		if err != nil {
 			return err
 		}
@@ -53,7 +80,7 @@ func Apply(ctx context.Context, pool *pgxpool.Pool) error {
 			return fmt.Errorf("read migration %s: %w", name, err)
 		}
 
-		tx, err := pool.Begin(ctx)
+		tx, err := conn.Begin(ctx)
 		if err != nil {
 			return fmt.Errorf("begin tx for migration %s: %w", name, err)
 		}
@@ -73,9 +100,9 @@ func Apply(ctx context.Context, pool *pgxpool.Pool) error {
 	return nil
 }
 
-func isApplied(ctx context.Context, pool *pgxpool.Pool, name string) (bool, error) {
+func isApplied(ctx context.Context, conn *pgxpool.Conn, name string) (bool, error) {
 	var exists bool
-	err := pool.QueryRow(ctx,
+	err := conn.QueryRow(ctx,
 		`SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE filename = $1)`, name,
 	).Scan(&exists)
 	if err != nil {

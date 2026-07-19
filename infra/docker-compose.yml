@@ -1,0 +1,84 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: taskorbit
+      POSTGRES_USER: taskorbit
+      POSTGRES_PASSWORD: taskorbit
+    ports:
+      - "5432:5432"
+    volumes:
+      - taskorbit-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taskorbit -d taskorbit"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  scheduler:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    command: ["/app/scheduler"]
+    environment: &db-env
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: taskorbit
+      DB_USER: taskorbit
+      DB_PASSWORD: taskorbit
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker-1:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    command: ["/app/worker"]
+    environment:
+      <<: *db-env
+      WORKER_ID: worker-1
+      WORKER_CONCURRENCY: "4"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      scheduler:
+        condition: service_started
+
+  worker-2:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    command: ["/app/worker"]
+    environment:
+      <<: *db-env
+      WORKER_ID: worker-2
+      WORKER_CONCURRENCY: "4"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      scheduler:
+        condition: service_started
+
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    command: ["/app/api"]
+    environment:
+      <<: *db-env
+      API_PORT: "8080"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+volumes:
+  taskorbit-postgres-data:
