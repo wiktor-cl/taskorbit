@@ -23,9 +23,11 @@ jobs:
         run: go test -race ./...
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
+        # golangci-lint-action@v6 with version:latest currently resolves to
+        # a v1.x release built with an older Go toolchain than this
+        # module's go.mod targets, which v1 refuses to lint. Running the v2
+        # module directly (same command verified locally) sidesteps that.
+        run: go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest run ./...
 
   compose-config:
     runs-on: ubuntu-latest
