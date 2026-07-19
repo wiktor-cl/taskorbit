@@ -137,6 +137,7 @@ func TestScheduler_ReapsDeadWorkersAndExpiresTheirLeases(t *testing.T) {
 	}
 	if task == nil {
 		t.Fatal("expected a claimable task")
+		return
 	}
 
 	sch.Tick(ctx)
@@ -149,6 +150,7 @@ func TestScheduler_ReapsDeadWorkersAndExpiresTheirLeases(t *testing.T) {
 	}
 	if reclaimed == nil {
 		t.Fatal("expected the dead worker's task to be reclaimable after Tick reaped it")
+		return
 	}
 	if reclaimed.ID != task.ID {
 		t.Fatalf("expected to reclaim task %d, got %d", task.ID, reclaimed.ID)

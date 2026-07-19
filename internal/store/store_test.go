@@ -121,6 +121,7 @@ func TestClaimNext_ReclaimsExpiredLease(t *testing.T) {
 	}
 	if first == nil {
 		t.Fatal("expected a task to be claimable")
+		return
 	}
 	if first.Attempt != 1 {
 		t.Fatalf("expected attempt 1 on first claim, got %d", first.Attempt)
@@ -144,6 +145,7 @@ func TestClaimNext_ReclaimsExpiredLease(t *testing.T) {
 	}
 	if second == nil {
 		t.Fatal("expected the task to be reclaimable after lease expiry")
+		return
 	}
 	if second.ID != first.ID {
 		t.Fatalf("expected to reclaim the same task %d, got %d", first.ID, second.ID)
@@ -178,6 +180,7 @@ func TestFailTask_RetriesThenDeadLetters(t *testing.T) {
 		}
 		if task == nil {
 			t.Fatalf("expected a claimable task on attempt %d", attempt)
+			return
 		}
 		taskID = task.ID
 

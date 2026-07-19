@@ -123,16 +123,16 @@ func TestNext_DayOfMonthAndDayOfWeek_AreOred(t *testing.T) {
 func TestParse_InvalidExpressions(t *testing.T) {
 	cases := []string{
 		"",
-		"* * * *",       // too few fields
-		"* * * * * *",   // too many fields
-		"60 * * * *",    // minute out of range
-		"* 24 * * *",    // hour out of range
-		"* * 0 * *",     // day-of-month out of range (min is 1)
-		"* * * 13 *",    // month out of range
-		"* * * * 7",     // day-of-week out of range (max is 6)
-		"abc * * * *",   // not a number
-		"1-60 * * * *",  // range exceeds max
-		"*/0 * * * *",   // zero step
+		"* * * *",      // too few fields
+		"* * * * * *",  // too many fields
+		"60 * * * *",   // minute out of range
+		"* 24 * * *",   // hour out of range
+		"* * 0 * *",    // day-of-month out of range (min is 1)
+		"* * * 13 *",   // month out of range
+		"* * * * 7",    // day-of-week out of range (max is 6)
+		"abc * * * *",  // not a number
+		"1-60 * * * *", // range exceeds max
+		"*/0 * * * *",  // zero step
 	}
 	for _, expr := range cases {
 		if _, err := cronparse.Parse(expr); err == nil {
