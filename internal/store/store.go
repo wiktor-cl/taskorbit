@@ -347,9 +347,13 @@ func (s *Store) ReapDeadWorkers(ctx context.Context, staleAfter time.Duration) (
 	}
 
 	if len(deadIDs) > 0 {
+		// Use the same Go-computed clock as ClaimNext's comparison, not SQL
+		// now() — mixing clock sources here would make the force-expire
+		// racy against any skew between the app process and the database.
+		expiredAt := time.Now().UTC()
 		_, err = s.pool.Exec(ctx, `
-			UPDATE task_runs SET lease_expires_at = now()
-			WHERE claimed_by = ANY($1) AND status = 'RUNNING'`, deadIDs)
+			UPDATE task_runs SET lease_expires_at = $2
+			WHERE claimed_by = ANY($1) AND status = 'RUNNING'`, deadIDs, expiredAt)
 		if err != nil {
 			return nil, fmt.Errorf("force-expire leases for dead workers: %w", err)
 		}
